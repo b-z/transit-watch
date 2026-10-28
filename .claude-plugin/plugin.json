@@ -1,0 +1,10 @@
+{
+  "name": "transit-watch",
+  "version": "0.1.0",
+  "description": "Forecast ISS / Tiangong / Hubble transits of the Sun and Moon near you: where to stand, when, how big, and whether the sky will be clear.",
+  "author": {"name": "b-z", "url": "https://github.com/b-z"},
+  "homepage": "https://github.com/b-z/transit-watch",
+  "repository": "https://github.com/b-z/transit-watch",
+  "license": "GPL-3.0-or-later",
+  "keywords": ["iss", "transit", "astrophotography", "sun", "moon"]
+}

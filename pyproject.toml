@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transit-watch"
+version = "0.1.0"
+description = "Find ISS / Tiangong / Hubble transits of the Sun and Moon near you, with centerlines, weather, maps and disk previews"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+authors = [{name = "b-z"}]
+keywords = ["iss", "transit", "astrophotography", "satellite", "sun", "moon", "sgp4"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = ["skyfield>=1.48", "numpy>=1.23", "sgp4>=2.22"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/b-z/transit-watch"
+Issues = "https://github.com/b-z/transit-watch/issues"
+
+[project.scripts]
+transit-watch = "transit_watch.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

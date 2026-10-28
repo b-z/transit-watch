@@ -1,0 +1,11 @@
+{
+  "name": "transit-watch",
+  "owner": {"name": "b-z"},
+  "plugins": [
+    {
+      "name": "transit-watch",
+      "source": "./",
+      "description": "Forecast ISS / Tiangong / Hubble transits of the Sun and Moon near you, with a daily report skill."
+    }
+  ]
+}
