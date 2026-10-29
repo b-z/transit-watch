@@ -112,7 +112,7 @@ transit-watch init -y --lat 35.6812 --lon 139.7671 --elevation 5 --timezone Asia
 - 轨道：[CelesTrak](https://celestrak.org)。按 CelesTrak 的要求，下载结果缓存 2 小时。
 - 星历：JPL DE421，通过 [skyfield](https://rhodesmill.org/skyfield/) 读取。地球定向参数：[USNO](https://maia.usno.navy.mil) 发布的 IERS Bulletin A。
 - 天气，以及日本境外的海拔：[Open-Meteo](https://open-meteo.com)（CC BY 4.0）。
-- 日本境内的海拔和地图：[国土地理院瓦片与 DEM](https://maps.gsi.go.jp/development/ichiran.html)（地理院タイル）。境外地图：Esri World Street Map。地图用 [Leaflet](https://leafletjs.com) 绘制。
+- 日本境内的海拔和地图：[国土地理院瓦片](https://maps.gsi.go.jp/development/ichiran.html)（地理院タイル）与[标高瓦片](https://maps.gsi.go.jp/development/demtile.html)：有 1 m 激光测量 DEM（DEM1A）的地方用 1 m，其余用 5 m 或 10 m，双线性插值，缓存在本地。境外地图：Esri World Street Map。地图用 [Leaflet](https://leafletjs.com) 绘制。
 
 这是一个独立项目，与 transit-finder.com 没有任何关联，也不会访问该网站。
 

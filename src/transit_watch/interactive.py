@@ -142,10 +142,17 @@ function loadTile(layer,z,x,y){const k=layer+z+"/"+x+"/"+y;if(!tiles.has(k))tile
   const bm=await createImageBitmap(await r.blob()),c=document.createElement("canvas");c.width=c.height=256;
   const g=c.getContext("2d",{willReadFrequently:true});g.drawImage(bm,0,0);return g.getImageData(0,0,256,256).data;})().catch(()=>null));
   return tiles.get(k);}
-async function demGSI(lat,lon){for(const [layer,z,src] of [["dem5a_png",15,"DEM5A"],["dem5b_png",15,"DEM5B"],["dem_png",14,"DEM10B"]]){
-  const [fx,fy]=tileXY(lat,lon,z),tx=Math.floor(fx),ty=Math.floor(fy),px=Math.floor((fx-tx)*256),py=Math.floor((fy-ty)*256);
-  const t=await loadTile(layer,z,tx,ty);if(!t)continue;const o=(py*256+px)*4,v=t[o]*65536+t[o+1]*256+t[o+2];
-  if(v===8388608)continue;return {h:(v<8388608?v:v-16777216)*0.01,src};}
+// same layers and order as the Python side (dem.py): DEM1A 1 m, DEM5A, DEM5B, DEM10B; bilinear between cell centres
+const LAYERS=[["dem1a_png",17,"DEM1A"],["dem5a_png",15,"DEM5A"],["dem5b_png",15,"DEM5B"],["dem_png",14,"DEM10B"]];
+async function demGSI(lat,lon){for(const [layer,z,src] of LAYERS){
+  const [tx,ty]=tileXY(lat,lon,z),fx=tx*256-.5,fy=ty*256-.5,x0=Math.floor(fx),y0=Math.floor(fy),u=fx-x0,v=fy-y0,vals=[];
+  for(const [dx,dy] of [[0,0],[1,0],[0,1],[1,1]]){const gx=x0+dx,gy=y0+dy,t=await loadTile(layer,z,Math.floor(gx/256),Math.floor(gy/256));
+    if(!t){vals.push(null);continue;}const o=((gy%256)*256+(gx%256))*4,q=t[o]*65536+t[o+1]*256+t[o+2];
+    vals.push(q===8388608?null:(q<8388608?q:q-16777216)*0.01);}
+  if(vals.every(h=>h==null))continue;
+  const w=[(1-u)*(1-v),u*(1-v),(1-u)*v,u*v];
+  if(vals.some(h=>h==null)){let b=-1,h=0;vals.forEach((x,i)=>{if(x!=null&&w[i]>b){b=w[i];h=x}});return {h,src};}
+  return {h:vals.reduce((s,x,i)=>s+x*w[i],0),src};}
   return {h:0,src:S.sea};}
 const om=new Map();
 async function demOM(lat,lon){const k=lat.toFixed(4)+","+lon.toFixed(4);if(!om.has(k))om.set(k,fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat.toFixed(5)}&longitude=${lon.toFixed(5)}`)
@@ -229,7 +236,7 @@ function show(id){
   if(cur.p0){const be=bandEdges(cur,cur.spotHell),m=be.length/2;
     overlay.addLayer(L.polygon(be,{stroke:false,fillColor:"#d0101f",fillOpacity:.05,interactive:false}));
     for(const e of [be.slice(0,m),be.slice(m)])overlay.addLayer(L.polyline(e,{color:"#d0101f",weight:1,opacity:.6,dashArray:"2 6",interactive:false}));
-    overlay.addLayer(L.polyline(cur.p0.map((_,i)=>at(cur,i,cur.spotHell)),{color:"#d0101f",weight:1.5,opacity:.55,interactive:false}));}
+    thin=L.polyline(cur.p0.map((_,i)=>at(cur,i,cur.spotHell)),{color:"#d0101f",weight:2,opacity:.8,interactive:false});overlay.addLayer(thin);}
   if(cur.tf.length)overlay.addLayer(L.polyline(cur.tf,{color:"#e07800",weight:1.5,dashArray:"6 6",interactive:false}));
   overlay.addLayer(dot(D.home,"#7a4fd0",6).bindTooltip(S.home));
   overlay.addLayer(dot(cur.spot,"#d0101f").bindTooltip(S.spot));
@@ -240,17 +247,23 @@ function show(id){
 }
 
 // Bold line: the centerline at the ground height of each point (only when zoomed in; heights come from the DEM).
-let gtok=0;
-async function drawGround(){const ev=cur;if(!ev||!ev.p0)return;const tok=++gtok;ground.clearLayers();if(map.getZoom()<13)return;
+let gtok=0,thin=null;
+async function drawGround(){const ev=cur;if(!ev||!ev.p0)return;const tok=++gtok;ground.clearLayers();
+  if(map.getZoom()<13){if(thin)thin.setStyle({opacity:.8});return;}
   const b=map.getBounds().pad(.3),n=ev.p0.length,idx=[];
   for(let i=0;i<n;i++){const p=at(ev,i,ev.spotHell);if(b.contains(p))idx.push(i);}
-  if(!idx.length)return;const st=Math.max(1,Math.ceil(idx.length/200)),pts=[];
-  for(let j=0;j<idx.length;j+=st){const i=idx[j],N=sparse(ev,i,"geoid"),hs=ev.spotHell,p=at(ev,i,hs),[ky,kx]=mPerDeg(p[0]);
-    const a=at(ev,Math.max(0,i-1),hs),b=at(ev,Math.min(n-1,i+1),hs),dx=(b[1]-a[1])*kx,dy=(b[0]-a[0])*ky,l=Math.hypot(dx,dy)||1;
-    const ux=-dy/l,uy=dx/l,q=at(ev,i,hs+1000),k=((q[1]-p[1])*kx*ux+(q[0]-p[0])*ky*uy)/1000;
+  if(!idx.length)return;
+  // fractional sample positions about 8 screen pixels apart (at most 400 points)
+  const i0=Math.max(0,idx[0]-1),i1=Math.min(n-1,idx[idx.length-1]+1);
+  const pa=map.latLngToContainerPoint(at(ev,i0,ev.spotHell)),pb=map.latLngToContainerPoint(at(ev,i1,ev.spotHell));
+  const m=Math.min(400,Math.max(2,Math.ceil(pa.distanceTo(pb)/8))),pts=[];
+  for(let j=0;j<=m;j++){const xf=i0+(i1-i0)*j/m,i=Math.min(n-2,Math.floor(xf)),f=xf-i,N=sparse(ev,xf,"geoid"),hs=ev.spotHell;
+    const lerp=(A,B)=>[A[0]+(B[0]-A[0])*f,A[1]+(B[1]-A[1])*f],p=lerp(at(ev,i,hs),at(ev,i+1,hs)),[ky,kx]=mPerDeg(p[0]);
+    const a=at(ev,i,hs),bb=at(ev,i+1,hs),dx=(bb[1]-a[1])*kx,dy=(bb[0]-a[0])*ky,l=Math.hypot(dx,dy)||1;
+    const ux=-dy/l,uy=dx/l,q=lerp(at(ev,i,hs+1000),at(ev,i+1,hs+1000)),k=((q[1]-p[1])*kx*ux+(q[0]-p[0])*ky*uy)/1000;
     const G=async x=>{const r=offset(p,x,ux,uy);return x-k*((await dem(ev,r[0],r[1])).h+N+cam()-hs);};
     const x=await root(G,await G(0));if(tok!==gtok)return;if(x!=null)pts.push(offset(p,x,ux,uy));}
-  ground.addLayer(L.polyline(pts,{color:"#d0101f",weight:3,interactive:false}));}
+  if(thin)thin.setStyle({opacity:0});ground.addLayer(L.polyline(pts,{color:"#d0101f",weight:3,interactive:false}));}
 map.on("moveend",drawGround);
 
 async function report(P,label){const ev=cur;if(!ev.p0)return;const r=await solve(ev,P);if(ev!==cur)return;
@@ -298,7 +311,7 @@ const sw={
   tf:`<svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#e07800" stroke-width="1.5" stroke-dasharray="6 5"/></svg>`,
   walk:`<svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#1667d9" stroke-width="2" stroke-dasharray="4 5"/></svg>`,
   dot:c=>`<svg width="34" height="14"><circle cx="17" cy="7" r="5.5" fill="${c}" stroke="#fff" stroke-width="2"/></svg>`};
-$("legend").innerHTML=[[sw.thin,S.lgThin],[sw.bold,S.lgBold],[sw.band,S.lgBand],[sw.tf,S.lgTf],[sw.dot("#d0101f"),S.lgSpot],
+$("legend").innerHTML=[[sw.bold,S.lgBold],[sw.band,S.lgBand],[sw.tf,S.lgTf],[sw.dot("#d0101f"),S.lgSpot],
   [sw.dot("#1667d9"),S.lgMe],[sw.walk,S.lgWalk],[sw.dot("#7a4fd0"),S.lgHome]].map(([a,b])=>`<div class="it">${a}<span>${b}</span></div>`).join("");
 function setLegend(on){$("legend").hidden=!on;$("leg").setAttribute("aria-pressed",on);try{localStorage.setItem("tw-legend",on?"1":"0")}catch(e){}}
 let legOn=true;try{legOn=localStorage.getItem("tw-legend")!=="0"}catch(e){}

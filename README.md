@@ -112,7 +112,7 @@ Satellites are propagated with SGP4 from the latest CelesTrak TLEs. Sun and Moon
 - Orbits: [CelesTrak](https://celestrak.org). Downloads are cached for 2 hours, as CelesTrak asks.
 - Ephemeris: JPL DE421 via [skyfield](https://rhodesmill.org/skyfield/). Earth orientation: IERS Bulletin A from [USNO](https://maia.usno.navy.mil).
 - Weather and elevation outside Japan: [Open-Meteo](https://open-meteo.com) (CC BY 4.0).
-- Elevation and maps in Japan: [GSI tiles and DEM](https://maps.gsi.go.jp/development/ichiran.html) (地理院タイル). Maps elsewhere: Esri World Street Map. Maps are drawn with [Leaflet](https://leafletjs.com).
+- Elevation and maps in Japan: [GSI tiles](https://maps.gsi.go.jp/development/ichiran.html) (地理院タイル) and [elevation tiles](https://maps.gsi.go.jp/development/demtile.html): the 1 m laser DEM (DEM1A) where it exists, else 5 m or 10 m, interpolated bilinearly and cached on disk. Maps elsewhere: Esri World Street Map. Maps are drawn with [Leaflet](https://leafletjs.com).
 
 This is an independent project. It is not affiliated with transit-finder.com and does not access it.
 

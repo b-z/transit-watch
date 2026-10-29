@@ -29,19 +29,11 @@ def _get_json(url, timeout=15):
 
 
 def elevation_gsi(lat, lon):
-    """Geospatial Information Authority of Japan DEM. None over the sea or outside Japan."""
-    q = urllib.parse.urlencode({"lon": f"{lon:.5f}", "lat": f"{lat:.5f}", "outtype": "JSON"})
-    # a failed request must not read as sea, or the chosen spot jumps along the line from run to run
-    for wait in (0, 2, 5, 10):
-        time.sleep(wait)
-        try:
-            v = _get_json("https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?" + q)["elevation"]
-            break
-        except Exception:
-            continue
-    else:
-        return None
-    return None if v == "-----" else float(v)
+    """GSI elevation tiles (DEM1A 1 m where available, else DEM5A/5B/DEM10B), bilinear. None over the sea or
+    outside Japan."""
+    from . import dem
+    h = dem.height(lat, lon)
+    return None if h is None else h[0]
 
 
 def elevation_open_meteo(lat, lon):

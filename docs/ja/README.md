@@ -112,7 +112,7 @@ transit-watch init -y --lat 35.6812 --lon 139.7671 --elevation 5 --timezone Asia
 - 軌道要素：[CelesTrak](https://celestrak.org)。CelesTrak の求めに従い、ダウンロードは 2 時間キャッシュします。
 - 暦：JPL DE421（[skyfield](https://rhodesmill.org/skyfield/) 経由）。地球回転パラメータ：[USNO](https://maia.usno.navy.mil) の IERS Bulletin A。
 - 天気と日本国外の標高：[Open-Meteo](https://open-meteo.com)（CC BY 4.0）。
-- 日本国内の標高と地図：[国土地理院のタイルと DEM](https://maps.gsi.go.jp/development/ichiran.html)（地理院タイル）。国外の地図：Esri World Street Map。地図の描画には [Leaflet](https://leafletjs.com) を使っています。
+- 日本国内の標高と地図：[地理院タイル](https://maps.gsi.go.jp/development/ichiran.html)と[標高タイル](https://maps.gsi.go.jp/development/demtile.html)：1 m の航空レーザ DEM（DEM1A）がある所はそれを、ない所は 5 m または 10 m を使い、双線形補間してローカルにキャッシュします。国外の地図：Esri World Street Map。地図の描画には [Leaflet](https://leafletjs.com) を使っています。
 
 本プロジェクトは独立したもので、transit-finder.com とは関係がなく、同サイトにアクセスすることもありません。
 
