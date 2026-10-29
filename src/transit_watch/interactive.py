@@ -89,6 +89,7 @@ a{color:var(--me)}
 #legend{position:fixed;z-index:1000;right:calc(max(10px,env(safe-area-inset-right,0px)) + 52px);top:calc(env(safe-area-inset-top,0px) + 52px);
 background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;display:grid;gap:4px;max-width:min(300px,calc(100vw - 90px));
 backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+[hidden]{display:none!important}
 #legend .it{display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:center}
 #tools #leg{font:italic 600 17px Georgia,serif}
 .sim{display:grid;gap:4px;margin-top:6px}
@@ -98,7 +99,7 @@ backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 <div id="top" role="tablist"></div>
 <div id="tools">
   <button class="tool" id="gps" aria-pressed="false">◎</button>
-  <button class="tool" id="layer">⧉</button>
+  <button class="tool" id="layer" aria-pressed="true">⧉</button>
   <button class="tool" id="fit">⤢</button>
   <button class="tool" id="leg" aria-pressed="true">i</button>
 </div>
@@ -206,7 +207,7 @@ const layers={gsi:L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/
   street:L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",{maxNativeZoom:19,maxZoom:20,attribution:"Tiles © Esri"}),
   sat:L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxNativeZoom:19,maxZoom:20,attribution:"Tiles © Esri"})};
 L.control.scale({imperial:false,position:"bottomleft"}).addTo(map);
-let cur=null,overlay=L.layerGroup().addTo(map),pick=L.layerGroup().addTo(map),ground=L.layerGroup().addTo(map),base=null,photo=false;
+let cur=null,overlay=L.layerGroup().addTo(map),pick=L.layerGroup().addTo(map),ground=L.layerGroup().addTo(map),base=null,photo=true;
 function setBase(){if(base)map.removeLayer(base);base=(cur.jp?(photo?layers.photo:layers.gsi):(photo?layers.sat:layers.street)).addTo(map);base.bringToBack();}
 const dot=(p,c,r=7)=>L.circleMarker(p,{radius:r,color:"#fff",weight:2,fillColor:c,fillOpacity:1});
 

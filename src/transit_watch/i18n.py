@@ -42,7 +42,7 @@ STRINGS = {
                  "when": "Center time on the line {t} ({dt} s vs the spot)",
                  "here": "Here: ground {H} m ({src}) + geoid {N} m + camera {c} m · {size}″ · altitude {alt}°, azimuth {az}°",
                  "target": "Target point: ground {H} m", "gpsAcc": "Location accuracy ±{m} m",
-                 "noGps": "Location unavailable (needs HTTPS and permission)", "sim": "View from here, zenith up: {n} frames on the disk at {fps} fps", "zenith": "Zenith", "legend": "Legend", "lgThin": "Centerline at the spot's height", "lgBold": "Centerline at the ground height of each point (zoom in)", "lgBand": "Visibility path: the station touches the disk anywhere inside", "lgTf": "transit-finder model centerline, for comparison", "lgSpot": "Spot / the point to walk to", "lgMe": "Tapped point or your location", "lgWalk": "Way from there to the centerline", "lgHome": "Home", "none": "Nothing worth shooting in this period."},
+                 "noGps": "Location unavailable (needs HTTPS and permission)", "sim": "View from here, zenith up: {n} frames on the disk at {fps} fps", "zenith": "Zenith", "legend": "Legend", "lgThin": "Centerline for the recommended spot's elevation (elsewhere only approximate)", "lgBold": "Centerline for the actual ground height under it (zoom in; trust this one)", "lgBand": "Visibility path: the station touches the disk anywhere inside", "lgTf": "transit-finder model centerline, for comparison", "lgSpot": "Recommended spot (nearest centerline point on land); after a tap, the point to walk to", "lgMe": "Tapped point or your location", "lgWalk": "Way from there to the centerline", "lgHome": "Home", "none": "Nothing worth shooting in this period."},
     },
     "zh": {
         "weekdays": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
@@ -73,7 +73,7 @@ STRINGS = {
         "zenith": "天顶", "zoom": "{sat} 放大 ×{zoom:.0f}",
         "mode": {"strict": "严格", "transit-finder": " transit-finder "},
         "imap": {"title": "凌日地图", "cam": "相机离地高度", "gps": "跟随我的位置", "layer": "地图 / 航拍",
-                 "fit": "显示家和机位", "sea": "海面", "home": "家", "spot": "机位",
+                 "fit": "显示家和机位", "sea": "海面", "home": "家", "spot": "推荐机位",
                  "meta": "机位海拔 {h} m · 带宽 {w} km · 高度角 {alt}° 方位 {az}°",
                  "tf": "transit-finder 线在{dir} {m} m", "spotLink": "机位 Google Maps",
                  "tap": "点地图上任意一点，或打开 ◎ 定位：按该点的实际高度算出离中心线多远、那里的中心时刻、是否在可见带内。",
@@ -84,7 +84,7 @@ STRINGS = {
                  "when": "中心线上的中心时刻 {t}（比机位 {dt} s）",
                  "here": "此处：地面 {H} m（{src}）+ 大地水准面 {N} m + 相机 {c} m · {size}″ · 高度角 {alt}° 方位 {az}°",
                  "target": "目标点：地面 {H} m", "gpsAcc": "定位精度 ±{m} m",
-                 "noGps": "无法定位（需要 HTTPS 和定位权限）", "sim": "从这里看（天顶朝上）：{fps} FPS 约 {n} 帧在盘面内", "zenith": "天顶", "legend": "图例", "lgThin": "机位高度的中心线", "lgBold": "按各点实际地面高度的中心线（放大后显示）", "lgBand": "可见带：带内都能看到空间站过盘面", "lgTf": "transit-finder 模型的中心线（对照）", "lgSpot": "机位 / 要走到的目标点", "lgMe": "你点的位置或当前定位", "lgWalk": "从那里走到中心线的方向", "lgHome": "家", "none": "这段时间没有值得拍的。"},
+                 "noGps": "无法定位（需要 HTTPS 和定位权限）", "sim": "从这里看（天顶朝上）：{fps} FPS 约 {n} 帧在盘面内", "zenith": "天顶", "legend": "图例", "lgThin": "中心线（按推荐机位的海拔算，离机位远处仅作参考）", "lgBold": "中心线（按脚下实际地面高度算，放大后显示，以这条为准）", "lgBand": "可见带：带内都能看到空间站过盘面", "lgTf": "transit-finder 模型的中心线（对照）", "lgSpot": "推荐机位（中心线上离家最近的陆地点）；点地图后是要走到的目标点", "lgMe": "你点的位置或当前定位", "lgWalk": "从那里走到中心线的方向", "lgHome": "家", "none": "这段时间没有值得拍的。"},
     },
     "ja": {
         "weekdays": ["月", "火", "水", "木", "金", "土", "日"],
@@ -126,7 +126,7 @@ STRINGS = {
                  "when": "中心線上の中心時刻 {t}（撮影地点との差 {dt} 秒）",
                  "here": "この地点：地面 {H} m（{src}）＋ジオイド高 {N} m＋カメラ {c} m・{size}″・高度 {alt}°・方位 {az}°",
                  "target": "目標地点：地面 {H} m", "gpsAcc": "測位精度 ±{m} m",
-                 "noGps": "現在地を取得できません（HTTPS と位置情報の許可が必要）", "sim": "ここからの見え方（天頂が上）：{fps} fps で約 {n} コマ", "zenith": "天頂", "legend": "凡例", "lgThin": "撮影地点の高さでの中心線", "lgBold": "各地点の実際の地面の高さでの中心線（拡大時）", "lgBand": "可視帯：帯の中ならどこでも通過が見える", "lgTf": "transit-finder モデルの中心線（比較用）", "lgSpot": "撮影地点 / 移動先", "lgMe": "タップした地点または現在地", "lgWalk": "そこから中心線への方向", "lgHome": "自宅", "none": "この期間に撮る価値のある通過はありません。"},
+                 "noGps": "現在地を取得できません（HTTPS と位置情報の許可が必要）", "sim": "ここからの見え方（天頂が上）：{fps} fps で約 {n} コマ", "zenith": "天頂", "legend": "凡例", "lgThin": "中心線（推奨撮影地点の標高で計算、離れた所では目安）", "lgBold": "中心線（足元の実際の地面の高さで計算、拡大時、こちらが正確）", "lgBand": "可視帯：帯の中ならどこでも通過が見える", "lgTf": "transit-finder モデルの中心線（比較用）", "lgSpot": "推奨撮影地点（自宅に最も近い陸上の中心線）。タップ後は移動先", "lgMe": "タップした地点または現在地", "lgWalk": "そこから中心線への方向", "lgHome": "自宅", "none": "この期間に撮る価値のある通過はありません。"},
     },
 }
 
