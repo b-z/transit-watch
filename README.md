@@ -12,7 +12,7 @@ transit-watch searches the next two weeks for transits of the ISS, the Tiangong 
 - **the time** to 0.01 s, the station's **apparent size** at that spot, the crossing time and the width of the visibility path;
 - **the weather** for that spot and hour (clear, partly cloudy, overcast, rain);
 - **two images**: a map of the centerline and a preview of the disk with the station drawn to scale, one silhouette per frame of your camera;
-- **an interactive map** (one HTML file for all events): tap any point, or follow your phone's location, to see how far and which way the centerline is *at that point's real ground height*, whether you are inside the visibility path, and the center time there.
+- **an interactive map** (one HTML file for all events): tap any point, or follow your phone's location, to see how far and which way the centerline is *at that point's real ground height*, whether you are inside the visibility path, the center time there, and a preview of the disk as seen from that point (the station's frames at your camera's frame rate).
 
 <p>
 <img src="docs/images/example-map.jpg" alt="Map: centerline, visibility path, home and the spot" width="100%">

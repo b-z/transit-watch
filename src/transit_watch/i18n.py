@@ -42,7 +42,7 @@ STRINGS = {
                  "when": "Center time on the line {t} ({dt} s vs the spot)",
                  "here": "Here: ground {H} m ({src}) + geoid {N} m + camera {c} m · {size}″ · altitude {alt}°, azimuth {az}°",
                  "target": "Target point: ground {H} m", "gpsAcc": "Location accuracy ±{m} m",
-                 "noGps": "Location unavailable (needs HTTPS and permission)", "none": "Nothing worth shooting in this period."},
+                 "noGps": "Location unavailable (needs HTTPS and permission)", "sim": "View from here, zenith up: {n} frames on the disk at {fps} fps", "zenith": "Zenith", "none": "Nothing worth shooting in this period."},
     },
     "zh": {
         "weekdays": ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
@@ -84,7 +84,7 @@ STRINGS = {
                  "when": "中心线上的中心时刻 {t}（比机位 {dt} s）",
                  "here": "此处：地面 {H} m（{src}）+ 大地水准面 {N} m + 相机 {c} m · {size}″ · 高度角 {alt}° 方位 {az}°",
                  "target": "目标点：地面 {H} m", "gpsAcc": "定位精度 ±{m} m",
-                 "noGps": "无法定位（需要 HTTPS 和定位权限）", "none": "这段时间没有值得拍的。"},
+                 "noGps": "无法定位（需要 HTTPS 和定位权限）", "sim": "从这里看（天顶朝上）：{fps} FPS 约 {n} 帧在盘面内", "zenith": "天顶", "none": "这段时间没有值得拍的。"},
     },
     "ja": {
         "weekdays": ["月", "火", "水", "木", "金", "土", "日"],
@@ -126,7 +126,7 @@ STRINGS = {
                  "when": "中心線上の中心時刻 {t}（撮影地点との差 {dt} 秒）",
                  "here": "この地点：地面 {H} m（{src}）＋ジオイド高 {N} m＋カメラ {c} m・{size}″・高度 {alt}°・方位 {az}°",
                  "target": "目標地点：地面 {H} m", "gpsAcc": "測位精度 ±{m} m",
-                 "noGps": "現在地を取得できません（HTTPS と位置情報の許可が必要）", "none": "この期間に撮る価値のある通過はありません。"},
+                 "noGps": "現在地を取得できません（HTTPS と位置情報の許可が必要）", "sim": "ここからの見え方（天頂が上）：{fps} fps で約 {n} コマ", "zenith": "天頂", "none": "この期間に撮る価値のある通過はありません。"},
     },
 }
 

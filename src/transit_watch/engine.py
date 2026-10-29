@@ -242,6 +242,27 @@ class Engine:
         return {"t": t_arr[i], "sep_arcmin": sep[i] * 60, "alt": alt.degrees[i], "az": az.degrees[i],
                 "range_km": rng.km[i], "size_arcsec": math.degrees(span / rng.km[i]) * 3600}
 
+    def sky_offset(self, sat, key, latlon, t_arr, elev_m=0):
+        """Station minus body at closest approach seen from latlon, in arcsec on the zenith-up frame (x right, y up)."""
+        t = self.view_min_sep(sat, key, latlon, t_arr, elev_m)["t"]
+        obs = wgs84.latlon(latlon[0], latlon[1], elev_m)
+        tt = self.ts.tt_jd([t.tt, t.tt + 0.05 / 86400])
+        s = (sat - obs).at(tt).frame_xyz(itrs).km
+        b = (self.earth + obs).at(tt).observe(self.bodies[key]).apparent().frame_xyz(itrs).km
+        s, b = s / np.linalg.norm(s, axis=0), b / np.linalg.norm(b, axis=0)
+        c = b[:, 0]
+        up = obs.itrs_xyz.km / np.linalg.norm(obs.itrs_xyz.km)
+        upv = up - np.dot(up, c) * c
+        upv /= np.linalg.norm(upv)
+        right = np.cross(c, upv)
+        d = s[:, 0] - c
+        v = (s[:, 1] - b[:, 1]) - d                      # relative motion over 0.05 s
+        x, y, vx, vy = np.dot(d, right), np.dot(d, upv), np.dot(v, right), np.dot(v, upv)
+        # the time grid leaves the sample slightly off closest approach: drop the along-track part
+        a = (x * vx + y * vy) / (vx * vx + vy * vy)
+        k = math.degrees(1) * 3600
+        return float(x - a * vx) * k, float(y - a * vy) * k
+
     def band_width(self, sat, key, latlon, t, R, body_ang, elev_m):
         """Width of the visibility path: the cone from the satellite spanning the body's disk, cut by the ground, measured across the centerline."""
         S = self._sat_itrs(sat, t).reshape(3, 1)

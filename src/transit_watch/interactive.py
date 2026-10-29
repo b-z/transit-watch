@@ -27,7 +27,9 @@ def event_data(e, S, tz):
         "tf": [[round(a, 6), round(b, 6)] for a, b in e.get("tf_line") or []][::2],
         "tfOffset": round(e["cmp"]["offset_m"]) if e.get("cmp") else None,
         "tfDir": S["dirs"][e["cmp"]["dir"]] if e.get("cmp") else "",
-        "jp": bool(in_japan(*e["spot"])), "onLand": bool(e["on_land"]),
+        "jp": bool(in_japan(*e["spot"])), "sat": e["sat"], "target": e["target"],
+        "bodySize": round(e["target_size"], 3), "angVel": round(e["ang_vel"], 4), "sunAlt": round(e["sun_alt"], 1),
+        "illum": e["illum"], "limb": e["limb_dir"], "skyPerM": [round(v, 5) for v in e["sky_per_m"]], "onLand": bool(e["on_land"]),
     }
     if tr:
         d.update({"t0": tr["t0"].timestamp() * 1000, "dt": tr["dt"], "p0": tr["p0"], "p1": tr["p1"],
@@ -84,6 +86,7 @@ h1{font-size:15px;margin:0 0 4px;font-weight:650;text-wrap:balance}
 label{color:var(--muted);font-size:12.5px} input{width:4.5em;font:inherit;padding:2px 4px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--fg)}
 a{color:var(--me)}
 .hint{color:var(--muted);font-size:12.5px}
+.sim{display:grid;gap:4px;margin-top:6px}
 .leaflet-container{background:var(--bg)}
 </style></head><body>
 <div id="map"></div>
@@ -163,6 +166,32 @@ async function solve(ev,P){
   const x=await root(G,-f.d),q=x==null?[f.lat,f.lon]:offset(P,x,ux,uy),gF=await dem(ev,q[0],q[1]);
   return {g,N,h,f,F:{lat:q[0],lon:q[1],d:x==null?f.d:x},gF};}
 
+// ---- view from a point: the disk with the station's frames, zenith up (same drawing as the report's preview) ----
+function scr(phi){return Math.atan2(-Math.cos(phi*Math.PI/180),-Math.sin(phi*Math.PI/180))*180/Math.PI;}
+function station(sat,px,rot){const s=px/2;let b;
+  if(sat==="ISS"){b=`<rect x="${-s}" y="${-s*.03}" width="${2*s}" height="${s*.06}"/><rect x="${-s*.07}" y="${-s*.5}" width="${s*.14}" height="${s}"/>`+
+    [-s,-s+s*.28,s-s*.22,s-s*.5].map(x=>`<rect x="${x}" y="${-s*.42}" width="${s*.22}" height="${s*.84}"/>`).join("");}
+  else b=`<rect x="${-s}" y="${-s*.15}" width="${2*s}" height="${s*.3}"/><rect x="${-s*.12}" y="${-s*.35}" width="${s*.24}" height="${s*.7}"/>`;
+  return `<g transform="rotate(${rot.toFixed(2)})">${b}</g>`;}
+// o: station minus body centre at closest approach, arcsec (x right, y up); size: station size, arcsec; dir: motion, deg ccw from zenith
+function diskSVG(ev,o,size,dir){
+  const R=150,W=360,C=W/2,sun=ev.target==="S",sc=R/(ev.bodySize*30),px=Math.max(size*sc,1.2),tr=scr(dir);
+  const ux=Math.cos(tr*Math.PI/180),uy=Math.sin(tr*Math.PI/180),ox=o[0]*sc,oy=-o[1]*sc,v=ev.angVel*60*sc/D.fps;
+  let disk,bg,sil;
+  if(sun){bg="#9fc4e8";sil="#111";disk=`<defs><radialGradient id="g"><stop offset="0" stop-color="#fffbe8"/><stop offset=".75" stop-color="#ffe9a8"/><stop offset="1" stop-color="#f2a640"/></radialGradient></defs><circle r="${R}" fill="url(#g)"/>`;}
+  else{bg=ev.sunAlt<-6?"#05070d":ev.sunAlt<0?"#2b3a5c":"#7fa6d6";sil="#000";const k=ev.illum,a=R*Math.abs(2*k-1);
+    disk=`<circle r="${R}" fill="#2a2a2e" opacity=".9"/><path d="M0 ${-R} A${R} ${R} 0 0 1 0 ${R} A${a} ${R} 0 0 ${k>.5?1:0} 0 ${-R}Z" fill="#e9e6dc" transform="rotate(${scr(ev.limb).toFixed(2)})"/>`;}
+  // frames along the path through o; frame 0 is the closest approach
+  const n=Math.ceil((R*1.15)/v);let g="",inside=0;
+  for(let i=-n;i<=n;i++){const x=ox+ux*v*i,y=oy+uy*v*i,r=Math.hypot(x,y);if(r>R+px)continue;if(r<R)inside++;
+    g+=`<g transform="translate(${x.toFixed(2)},${y.toFixed(2)})" opacity="${i===0?1:.45}" fill="${sil}">${station(ev.sat,px,tr+90)}</g>`;}
+  const L=R*1.25,path=`<line x1="${ox-ux*L}" y1="${oy-uy*L}" x2="${ox+ux*L}" y2="${oy+uy*L}" stroke="#d0101f" stroke-width="1.2" stroke-dasharray="5 5" opacity=".8"/>`+
+    `<polygon points="0,-7 14,0 0,7" fill="#d0101f" transform="translate(${(ox+ux*L).toFixed(1)},${(oy+uy*L).toFixed(1)}) rotate(${tr.toFixed(1)})"/>`;
+  const fg=sun||ev.sunAlt>=0?"#111":"#ddd";
+  return {inside,svg:`<svg viewBox="${-C} ${-C} ${W} ${W}" width="100%" style="max-width:360px;display:block;background:${bg};border-radius:8px">
+    ${disk}${path}${g}<g transform="translate(${-C+16},${-C+14})" fill="${fg}" stroke="${fg}"><line x1="0" y1="26" x2="0" y2="4" stroke-width="1.5"/><polygon points="0,-3 -5,7 5,7" stroke="none"/>
+    <text x="9" y="20" stroke="none" font-size="11">${S.zenith}</text></g></svg>`};}
+
 // ---- map ----
 const map=L.map("map",{zoomControl:false,attributionControl:true});
 const layers={gsi:L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",{maxNativeZoom:18,maxZoom:20,attribution:"地理院タイル"}),
@@ -230,8 +259,13 @@ async function report(P,label){const ev=cur;if(!ev.p0)return;const r=await solve
   const L3=`<div>${S.when.replace("{t}",`<span class="num">${tstr(t)}</span>`).replace("{dt}",(dt>=0?"+":"")+dt.toFixed(2))}</div>`;
   const L4=`<div class="meta">${S.here.replace("{H}",r.g.h.toFixed(1)).replace("{src}",r.g.src).replace("{N}",r.N.toFixed(1)).replace("{c}",cam().toFixed(1))
     .replace("{size}",sparse(ev,r.f.x,"size").toFixed(1)).replace("{alt}",sparse(ev,r.f.x,"alt").toFixed(0)).replace("{az}",sparse(ev,r.f.x,"az").toFixed(0))}</div>`;
+  // signed distance of P to the left of the line's direction of travel, and the view from P
+  const i0=Math.min(ev.p0.length-2,Math.floor(r.f.x)),qa=at(ev,i0,r.h),qb=at(ev,i0+1,r.h),[qy,qx]=mPerDeg(qa[0]);
+  const lx=(qb[1]-qa[1])*qx,ly=(qb[0]-qa[0])*qy,ll=Math.hypot(lx,ly)||1,side=(-r.f.fx*(-ly/ll)+-r.f.fy*(lx/ll));
+  const dv=diskSVG(ev,[side*ev.skyPerM[0],side*ev.skyPerM[1]],sparse(ev,r.f.x,"size"),sparse(ev,r.f.x,"dir"));
+  const L6=`<div class="sim"><div class="meta">${S.sim.replace("{n}",dv.inside).replace("{fps}",D.fps)}</div>${dv.svg}</div>`;
   const L5=`<div class="meta">${S.target.replace("{H}",r.gF.h.toFixed(1))} · <span class="num">${r.F.lat.toFixed(6)}, ${r.F.lon.toFixed(6)}</span> · <a href="${maps([r.F.lat,r.F.lon])}" target="_blank" rel="noopener">Google Maps</a></div>`;
-  $("out").innerHTML=(label==="gps"?`<div class="meta">${S.gpsAcc.replace("{m}",lastFix.coords.accuracy.toFixed(0))}</div>`:"")+L1+L2+L3+L4+L5;
+  $("out").innerHTML=(label==="gps"?`<div class="meta">${S.gpsAcc.replace("{m}",lastFix.coords.accuracy.toFixed(0))}</div>`:"")+L1+L2+L3+L4+L5+L6;
   $("panel").classList.remove("min");}
 
 map.on("click",e=>{if(gpsOn)toggleGps();report([e.latlng.lat,e.latlng.lng],"tap");});

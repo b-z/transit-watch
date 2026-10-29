@@ -135,6 +135,23 @@ def compare(other, e):
             "time": tr.t_center.utc_datetime()}
 
 
+def sky_per_metre(eng, sat, e, step_m=150.0):
+    """How the station's path on the disk moves when the observer steps sideways off the centerline: arcsec on the
+    zenith-up frame per metre to the left of the line's direction of travel. The interactive map uses it to draw the
+    view from any point (the shift is linear across the visibility path)."""
+    xy = geo.local_xy(e["line"], e["spot"])
+    i = min(range(len(xy) - 1), key=lambda k: math.hypot(*xy[k]) + math.hypot(*xy[k + 1]))
+    dx, dy = xy[i + 1][0] - xy[i][0], xy[i + 1][1] - xy[i][1]
+    n = math.hypot(dx, dy) or 1
+    lx, ly = -dy / n, dx / n                                    # left normal, unit
+    tt = eng.ts.tt_jd(e["t"].tt + np.arange(-3000, 3001) * 0.002 / 86400)
+    off = []
+    for sgn in (1, -1):
+        p = geo.from_local(sgn * lx * step_m / 1000, sgn * ly * step_m / 1000, e["spot"])
+        off.append(eng.sky_offset(sat, e["target"], p, tt, e["h_ell"]))
+    return [(off[0][0] - off[1][0]) / (2 * step_m), (off[0][1] - off[1][1]) / (2 * step_m)]
+
+
 def maps_url(p):
     return f"https://www.google.com/maps/search/?api=1&query={p[0]:.5f},{p[1]:.5f}"
 
@@ -191,6 +208,7 @@ def run(cfg, render_images=None, log=print):
             p0 = e["track"]["p0"]
             # geoid along the line for the map; a coarser grid keeps the number of geoid requests down
             e["track"]["geoid"] = [round(geo.geoid_height(*p0[i], grid=0.25), 2) for i in e["track"]["sparse"]["i"]]
+        e["sky_per_m"] = sky_per_metre(eng, sat, e)
         picks.append(e)
         log(f"  {e['time']:%m-%d %H:%M:%S} {e['sat']} {e['target']} {e['size']:.1f}″")
 
