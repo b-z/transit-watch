@@ -86,6 +86,11 @@ h1{font-size:15px;margin:0 0 4px;font-weight:650;text-wrap:balance}
 label{color:var(--muted);font-size:12.5px} input{width:4.5em;font:inherit;padding:2px 4px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--fg)}
 a{color:var(--me)}
 .hint{color:var(--muted);font-size:12.5px}
+#legend{position:fixed;z-index:1000;right:calc(max(10px,env(safe-area-inset-right,0px)) + 52px);top:calc(env(safe-area-inset-top,0px) + 52px);
+background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:12.5px;display:grid;gap:4px;max-width:min(300px,calc(100vw - 90px));
+backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#legend .it{display:grid;grid-template-columns:34px 1fr;gap:8px;align-items:center}
+#tools #leg{font:italic 600 17px Georgia,serif}
 .sim{display:grid;gap:4px;margin-top:6px}
 .leaflet-container{background:var(--bg)}
 </style></head><body>
@@ -95,7 +100,9 @@ a{color:var(--me)}
   <button class="tool" id="gps" aria-pressed="false">◎</button>
   <button class="tool" id="layer">⧉</button>
   <button class="tool" id="fit">⤢</button>
+  <button class="tool" id="leg" aria-pressed="true">i</button>
 </div>
+<div id="legend"></div>
 <div id="panel"><button id="grip" aria-label="toggle"></button><div class="body">
   <h1 id="title"></h1>
   <div class="meta" id="meta"></div>
@@ -223,7 +230,7 @@ function show(id){
     for(const e of [be.slice(0,m),be.slice(m)])overlay.addLayer(L.polyline(e,{color:"#d0101f",weight:1,opacity:.6,dashArray:"2 6",interactive:false}));
     overlay.addLayer(L.polyline(cur.p0.map((_,i)=>at(cur,i,cur.spotHell)),{color:"#d0101f",weight:1.5,opacity:.55,interactive:false}));}
   if(cur.tf.length)overlay.addLayer(L.polyline(cur.tf,{color:"#e07800",weight:1.5,dashArray:"6 6",interactive:false}));
-  overlay.addLayer(dot(D.home,"#1667d9",6).bindTooltip(S.home));
+  overlay.addLayer(dot(D.home,"#7a4fd0",6).bindTooltip(S.home));
   overlay.addLayer(dot(cur.spot,"#d0101f").bindTooltip(S.spot));
   map.setView(cur.spot,13);
   $("out").innerHTML=`<div class="hint">${cur.p0?S.tap:S.noTrack}</div>`;
@@ -282,6 +289,19 @@ function toggleGps(){gpsOn=!gpsOn;$("gps").setAttribute("aria-pressed",gpsOn);
   else{navigator.geolocation.clearWatch(watch);if(me){map.removeLayer(me);map.removeLayer(acc);me=acc=null;}}}
 $("gps").onclick=toggleGps;
 $("layer").onclick=()=>{photo=!photo;$("layer").setAttribute("aria-pressed",photo);setBase();};
+// legend: open on first visit, then remembered per browser
+const sw={
+  thin:`<svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#d0101f" stroke-width="1.5" opacity=".6"/></svg>`,
+  bold:`<svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#d0101f" stroke-width="3.5"/></svg>`,
+  band:`<svg width="34" height="14"><rect x="1" y="2" width="32" height="10" fill="#d0101f" opacity=".1"/><line x1="1" y1="2" x2="33" y2="2" stroke="#d0101f" stroke-dasharray="2 4"/><line x1="1" y1="12" x2="33" y2="12" stroke="#d0101f" stroke-dasharray="2 4"/></svg>`,
+  tf:`<svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#e07800" stroke-width="1.5" stroke-dasharray="6 5"/></svg>`,
+  walk:`<svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#1667d9" stroke-width="2" stroke-dasharray="4 5"/></svg>`,
+  dot:c=>`<svg width="34" height="14"><circle cx="17" cy="7" r="5.5" fill="${c}" stroke="#fff" stroke-width="2"/></svg>`};
+$("legend").innerHTML=[[sw.thin,S.lgThin],[sw.bold,S.lgBold],[sw.band,S.lgBand],[sw.tf,S.lgTf],[sw.dot("#d0101f"),S.lgSpot],
+  [sw.dot("#1667d9"),S.lgMe],[sw.walk,S.lgWalk],[sw.dot("#7a4fd0"),S.lgHome]].map(([a,b])=>`<div class="it">${a}<span>${b}</span></div>`).join("");
+function setLegend(on){$("legend").hidden=!on;$("leg").setAttribute("aria-pressed",on);try{localStorage.setItem("tw-legend",on?"1":"0")}catch(e){}}
+let legOn=true;try{legOn=localStorage.getItem("tw-legend")!=="0"}catch(e){}
+setLegend(legOn);$("leg").title=S.legend;$("leg").onclick=()=>setLegend($("legend").hidden);
 $("fit").onclick=()=>{map.fitBounds(L.latLngBounds([D.home,cur.spot]).pad(.3));};
 $("grip").onclick=()=>$("panel").classList.toggle("min");
 $("cam").onchange=()=>{drawGround();if(lastFix&&gpsOn)locate(lastFix);};
