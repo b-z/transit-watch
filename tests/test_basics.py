@@ -45,3 +45,23 @@ def test_local_xy_roundtrip():
     (x, y), = geo.local_xy([(35.1, 139.2)], o)
     assert geo.from_local(x, y, o) == (35.1, 139.2) or np.allclose(geo.from_local(x, y, o), (35.1, 139.2))
     assert geo.bearing_index(1, 1) == 1 and geo.bearing_index(0, -1) == 4
+
+
+def test_land_spot_independent_of_sampling(monkeypatch):
+    """The chosen spot must not move along the line just because the line was sampled at other instants."""
+    from transit_watch import geo
+    home = (35.0, 139.0)
+    monkeypatch.setattr(geo, "elevation_lookup", lambda provider, lat, lon: 10.0 if lon > 139.05 else None)
+
+    def line(offset_km, step_km):
+        pts, s = [], -100 + offset_km
+        while s < 100:
+            pts.append(geo.from_local(s, 2.0 + 0.1 * s, home))
+            s += step_km
+        return pts
+
+    a = geo.nearest_land_on_line(line(0.0, 0.37), home)
+    b = geo.nearest_land_on_line(line(0.21, 0.29), home)
+    assert a and b
+    (x, y), = geo.local_xy([a[1:3]], b[1:3])
+    assert math.hypot(x, y) < 0.01                        # within 10 m

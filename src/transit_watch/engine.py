@@ -159,6 +159,38 @@ class Engine:
         tr.at_home = self.view_min_sep(sat, key, home, t, elev_m)
         return tr
 
+    def track(self, sat, key, t_center, home, max_km, step_s=0.05, sparse_s=2.0, span_s=150, min_alt=5):
+        """Dense centerline around t_center for the interactive map: footprints at ellipsoidal heights 0 and 1000 m
+        (the line moves linearly with height, so any height is an interpolation), plus the slowly varying
+        observables every sparse_s seconds. Only the part within max_km of home is kept."""
+        n = int(2 * span_s / step_s) + 1
+        t = self.ts.tt_jd(t_center.tt + (np.arange(n) * step_s - span_s) / 86400)
+        S, B = self._sat_itrs(sat, t), self._body_itrs(key, t)
+        G0, G1 = _ray_ground(S, B, 0.0), _ray_ground(S, B, 1.0)
+        los = S - G0
+        sin_alt = (los * _up(np.nan_to_num(G0))).sum(0) / np.linalg.norm(los, axis=0)
+        ok = ~np.isnan(G0[0]) & ~np.isnan(G1[0]) & (sin_alt > math.sin(math.radians(min_alt)))
+        H = wgs84.latlon(home[0], home[1], 0).itrs_xyz.km.reshape(3, 1)
+        ok &= np.linalg.norm(np.nan_to_num(G0) - H, axis=0) < max_km
+        idx = np.flatnonzero(ok)
+        if len(idx) < 2:
+            return None
+        run = min(_runs(idx), key=lambda r: abs(t.tt[r] - t_center.tt).min())   # the run around t_center
+        G0, G1 = G0[:, run], G1[:, run]
+        lat0, lon0 = _xyz_to_latlon(G0)
+        lat1, lon1 = _xyz_to_latlon(G1)
+        k = max(1, int(round(sparse_s / step_s)))
+        sparse = {"i": [], "size": [], "alt": [], "az": [], "width": [], "dur": [], "dir": []}
+        for i in list(range(0, len(run), k)) + ([len(run) - 1] if (len(run) - 1) % k else []):
+            v = self.view(sat, key, (lat0[i], lon0[i]), t[run[i]], 0)
+            sparse["i"].append(i)
+            for name, val in (("size", v["size_arcsec"]), ("alt", v["alt"]), ("az", v["az"]),
+                              ("width", v["width_km"] or 0.0), ("dur", v["duration_s"] or 0.0), ("dir", v["motion_dir"])):
+                sparse[name].append(round(float(val), 4))
+        return {"t0": t[run[0]].utc_datetime(), "dt": step_s,
+                "p0": np.round(np.c_[lat0, lon0], 7).tolist(), "p1": np.round(np.c_[lat1, lon1], 7).tolist(),
+                "sparse": sparse}
+
     # -- observables --
     def view(self, sat, key, latlon, t, elev_m=0):
         """Geometry seen from latlon at time t."""

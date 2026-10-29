@@ -47,7 +47,7 @@ Other options (satellites, camera frame rate `render.fps`, output folder, model)
 transit-watch run --quiet
 ```
 
-The Markdown report goes to stdout and, with a JSON twin, to the output folder (`~/transit-watch/reports/` by default). Image paths are in the JSON (`events[].images`).
+The Markdown report goes to stdout and, with a JSON twin, to the output folder (`~/transit-watch/reports/` by default). Image paths are in the JSON (`events[].images`); the interactive map (`map`, one HTML file for all events) lets the user tap any point or use their phone's location to get the distance to the centerline at that point's real height. Offer its path, and mention it needs HTTPS hosting for location.
 
 Report to the user:
 

@@ -11,7 +11,8 @@ transit-watch searches the next two weeks for transits of the ISS, the Tiangong 
 - **the spot**: the point of the centerline nearest to home *that is on land*, with the centerline recomputed for that spot's real elevation;
 - **the time** to 0.01 s, the station's **apparent size** at that spot, the crossing time and the width of the visibility path;
 - **the weather** for that spot and hour (clear, partly cloudy, overcast, rain);
-- **two images**: a map of the centerline and a preview of the disk with the station drawn to scale, one silhouette per frame of your camera.
+- **two images**: a map of the centerline and a preview of the disk with the station drawn to scale, one silhouette per frame of your camera;
+- **an interactive map** (one HTML file for all events): tap any point, or follow your phone's location, to see how far and which way the centerline is *at that point's real ground height*, whether you are inside the visibility path, and the center time there.
 
 <p>
 <img src="docs/images/example-map.jpg" alt="Map: centerline, visibility path, home and the spot" width="100%">
@@ -46,7 +47,7 @@ transit-watch run       # prints the report and saves it with the images
 transit-watch init -y --lat 35.6812 --lon 139.7671 --elevation 5 --timezone Asia/Tokyo --language en
 ```
 
-Reports go to `~/transit-watch/reports/` as Markdown and JSON, with the images in a folder per day. Run it once a day (cron, launchd, a scheduled task): orbits are only reliable a few days ahead, so check again on the day of the transit.
+Reports go to `~/transit-watch/reports/` as Markdown and JSON, with the images in a folder per day and the interactive map as `<date>-map.html`. Host the map over HTTPS (any static web server) if you want to use your phone's location on it. Run it once a day (cron, launchd, a scheduled task): orbits are only reliable a few days ahead, so check again on the day of the transit.
 
 ### With Claude Code
 
@@ -85,7 +86,7 @@ Then ask, for example, "any ISS transits worth shooting this week?".
 At every instant, the observers who see the station exactly over the center of the Sun or the Moon lie on the line from the center of that body through the station, extended to the ground. As the station moves, that footprint draws the **centerline**. transit-watch finds where centerlines pass near home, then:
 
 1. walks along the centerline from the point nearest home until it reaches land;
-2. recomputes the centerline for that spot's elevation and repeats until the elevation settles: at 40° altitude, 300 m of height moves the centerline about 300 m sideways;
+2. recomputes the centerline for that spot's height and solves for the point that lies on the centerline at its own ground height: at 40° altitude, 300 m of height moves the centerline about 360 m sideways. Heights are ellipsoidal: in Japan the GSI geoid model is added to the DEM elevation (about 37 m around Tokyo, which alone moves a centerline 20–45 m);
 3. computes, *at that spot*, the instant of the central transit, the apparent size and speed of the station, the crossing time and the width of the visibility path;
 4. asks Open-Meteo for the cloud cover and rain chance at that spot and hour.
 

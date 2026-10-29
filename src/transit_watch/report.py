@@ -11,7 +11,7 @@ import numpy as np
 from skyfield import almanac
 from skyfield.api import wgs84
 
-from . import data, geo, render, weather
+from . import data, geo, interactive, render, weather
 from .engine import Engine, TFCompatEngine
 from .i18n import strings
 
@@ -61,27 +61,73 @@ def describe(eng, tr, spot, elev, tz):
 
 
 def at_elevation(eng, tr, spot, h, provider):
-    """The centerline shifts with the observer's height (about 300 m for 300 m at 40° altitude):
-    recompute it at the spot's real elevation until the elevation settles."""
+    """The centerline shifts with the observer's height (about 360 m for 300 m at 40° altitude), so the spot must
+    be a point whose own ground height puts it on the centerline. h is above sea level (the geoid); the engine
+    needs the height above the ellipsoid, so the geoid height is added.
+
+    Simple iteration (look up the height, recompute the line, repeat) diverges on slopes steeper than about the
+    altitude angle, so solve along the line's normal instead: the line for height z crosses the normal at
+    x_L(z) = k (z - z_a); find x with x = x_L(ground(x)) by bracketing and bisection.
+    Returns (transit, spot, elevation above sea level, geoid height)."""
     sat = next(s for s in eng.sats if s.name == tr.sat)
-    tr2 = tr
-    for _ in range(4):
-        cand = eng._refine(sat, tr.target, spot, None, tr.t_center.tt - 90 / 86400, tr.t_center.tt + 90 / 86400, 0.02, 0, h)
-        if cand is None:
+    n = geo.geoid_height(*spot)
+    t0, t1 = tr.t_center.tt - 90 / 86400, tr.t_center.tt + 90 / 86400
+
+    def line_at(z, near):
+        return eng._refine(sat, tr.target, near, None, t0, t1, 0.02, 0, z)
+
+    za = h + n
+    a = line_at(za, spot)
+    b = line_at(za + 100, a.spot) if a else None
+    if a is None or b is None:
+        return tr, spot, h, n
+    (bx, by), = geo.local_xy([b.spot], a.spot)
+    shift = math.hypot(bx, by)                      # km per 100 m of height
+    if shift == 0:
+        return a, a.spot, h, n
+    ux, uy, k = bx / shift, by / shift, shift * 10  # unit normal, metres of shift per metre of height
+
+    def ground(x):
+        lat, lon = geo.from_local(ux * x / 1000, uy * x / 1000, a.spot)
+        v = geo.elevation_lookup(provider, lat, lon)
+        return (lat, lon), (0.0 if v is None else v)
+
+    def g(x):
+        p, z = ground(x)
+        return x - k * (z + n - za), p, z
+
+    g0, p0, z0 = g(0.0)
+    if abs(g0) < 0.5:
+        return a, a.spot, z0, n
+    direction, lo, glo, step, hit = (1 if g0 < 0 else -1), 0.0, g0, max(10.0, abs(g0)), None
+    for _ in range(10):
+        hi = lo + direction * step
+        ghi, p, z = g(hi)
+        if (ghi > 0) != (glo > 0):
+            for _ in range(14):
+                if abs(hi - lo) < 0.5:
+                    break
+                mid = (lo + hi) / 2
+                gm, p, z = g(mid)
+                if (gm > 0) == (glo > 0):
+                    lo, glo = mid, gm
+                else:
+                    hi = mid
+            hit = ground((lo + hi) / 2)
             break
-        tr2, spot = cand, cand.spot
-        h2 = geo.elevation_lookup(provider, *spot)
-        if h2 is None or abs(h2 - h) < 3:
-            return tr2, spot, h if h2 is None else h2
-        h = h2
-    return tr2, spot, h
+        lo, glo, step = hi, ghi, step * 2
+    if hit is None:
+        return a, a.spot, z0, n
+    (lat, lon), z = hit
+    final = line_at(z + n, (lat, lon))
+    return (final, final.spot, z, n) if final else (a, a.spot, z0, n)
 
 
 def compare(other, e):
     sat = next((s for s in other.sats if s.model.satnum == e["norad"]), None)
     if sat is None:
         return None
-    tr = other._refine(sat, e["target"], e["spot"], None, e["t"].tt - 120 / 86400, e["t"].tt + 120 / 86400, 0.02, 0, e["elev"])
+    tr = other._refine(sat, e["target"], e["spot"], None, e["t"].tt - 120 / 86400, e["t"].tt + 120 / 86400, 0.02, 0, e["h_ell"])
     if tr is None:
         return None
     (x, y), = geo.local_xy([tr.spot], e["spot"])
@@ -111,11 +157,12 @@ def run(cfg, render_images=None, log=print):
     now = dt.datetime.now(tz)
     t0, t1 = eng.ts.from_datetime(now), eng.ts.from_datetime(now + dt.timedelta(days=srch["days"]))
     max_km = max(r["max_distance_km"] for g in rules.values() for r in g.values())
-    found = eng.find(home, t0, t1, travel_km=max_km, min_alt=srch["min_altitude_deg"], elev_m=elev0)
+    h_home = elev0 + geo.geoid_height(*home)
+    found = eng.find(home, t0, t1, travel_km=max_km, min_alt=srch["min_altitude_deg"], elev_m=h_home)
 
     picks = []
     for tr in found:
-        e = describe(eng, tr, tr.spot, elev0, tz)
+        e = describe(eng, tr, tr.spot, h_home, tz)
         e["is_iss"] = e["norad"] == iss_id
         r = rules["iss" if e["is_iss"] else "other"]["sun" if e["target"] == "S" else "moon"]
         if e["size"] < r["min_size_arcsec"] or e["dist_cl"] > r["max_distance_km"] or e["alt"] < srch["min_altitude_deg"]:
@@ -123,20 +170,27 @@ def run(cfg, render_images=None, log=print):
         if e["target"] == "M" and (e["illum"] or 0) < r.get("min_illumination", 0):
             continue
         land = geo.nearest_land_on_line(tr.line, home, provider, max_search_km=cfg["spot"]["max_search_km"])
-        if land:
-            tr_h, spot, h = at_elevation(eng, tr, land[1:3], land[3], provider)
-            dist_cl = e["dist_cl"]
-            e = describe(eng, tr_h, spot, h, tz)
-            e["is_iss"], e["dist_cl"], e["on_land"] = e["norad"] == iss_id, dist_cl, True
-            (x, y), = geo.local_xy([spot], home)
-            e["spot_km"] = math.hypot(x, y)
-        else:
-            e["on_land"], e["spot_km"] = False, e["dist_cl"]
+        # over the sea the "spot" is the nearest centerline point at sea level
+        tr_h, spot, h, n = (at_elevation(eng, tr, land[1:3], land[3], provider) if land
+                            else at_elevation(eng, tr, tr.spot, 0.0, "none"))
+        dist_cl = e["dist_cl"]
+        e = describe(eng, tr_h, spot, h + n, tz)
+        e["is_iss"], e["dist_cl"], e["on_land"] = e["norad"] == iss_id, dist_cl, bool(land)
+        e["elev"], e["geoid"], e["h_ell"] = h, n, h + n
+        (x, y), = geo.local_xy([spot], home)
+        e["spot_km"] = math.hypot(x, y)
         e["grade"] = grade(e, cfg)
         e["model"], e["cmp_model"] = mode, cmp_mode
         e["cmp"] = compare(other, e) if other else None
         e["wx"] = weather.forecast(*e["spot"], e["time"], loc["timezone"]) if cfg["weather"]["enabled"] else None
         e["home_name"] = S["home"] if loc["name"] in ("", "Home") else loc["name"]
+        e["id"] = f"{e['sat']}-{'sun' if e['target'] == 'S' else 'moon'}-{e['t'].utc_datetime():%Y%m%dT%H%M}Z".lower()
+        sat = next(s for s in eng.sats if s.model.satnum == e["norad"])
+        e["track"] = eng.track(sat, e["target"], e["t"], home, max_km + 40)
+        if e["track"]:
+            p0 = e["track"]["p0"]
+            # geoid along the line for the map; a coarser grid keeps the number of geoid requests down
+            e["track"]["geoid"] = [round(geo.geoid_height(*p0[i], grid=0.25), 2) for i in e["track"]["sparse"]["i"]]
         picks.append(e)
         log(f"  {e['time']:%m-%d %H:%M:%S} {e['sat']} {e['target']} {e['size']:.1f}″")
 
@@ -188,13 +242,22 @@ def run(cfg, render_images=None, log=print):
         md.append("")
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    map_path = interactive.write(picks, home, S, cfg, out_dir / f"{today}-map.html", now.isoformat(timespec="minutes"))
+    md.append(f"{S['imap']['title']}: {map_path}")
     report = "\n".join(md)
     (out_dir / f"{today}.md").write_text(report)
-    keep = ("sat", "norad", "target", "size", "alt", "az", "range", "width", "motion_dir", "ang_vel", "target_size",
-            "duration", "illum", "sun_alt", "dist_cl", "spot", "elev", "on_land", "spot_km", "grade", "wx", "images")
+    for e in picks:
+        e["grade_label"] = S["grade"][e["grade"]]
+        e["weather_label"] = S["verdict"][e["wx"]["verdict"]] if e.get("wx") and "verdict" in e["wx"] else None
+    keep = ("id", "grade_label", "weather_label", "sat", "norad", "target", "size", "alt", "az", "range", "width", "motion_dir", "ang_vel", "target_size",
+            "duration", "illum", "sun_alt", "dist_cl", "spot", "elev", "geoid", "on_land", "spot_km", "grade", "wx", "images")
     js = [{**{k: e.get(k) for k in keep}, "time": e["time"].isoformat(),
            "comparison": ({k: v for k, v in e["cmp"].items() if k != "line"} | {"model": cmp_mode,
                           "time": e["cmp"]["time"].astimezone(tz).isoformat()}) if e.get("cmp") else None}
           for e in picks]
-    (out_dir / f"{today}.json").write_text(json.dumps({"model": mode, "events": js}, ensure_ascii=False, indent=1))
+    tle_epochs = {NAMES.get(s.model.satnum, s.name): s.epoch.utc_datetime().astimezone(tz).isoformat(timespec="minutes")
+                  for s in eng.sats}
+    (out_dir / f"{today}.json").write_text(json.dumps({"model": mode, "generated": now.isoformat(timespec="seconds"),
+                                                      "map": str(map_path), "tle_epochs": tle_epochs, "events": js},
+                                                      ensure_ascii=False, indent=1))
     return report, out_dir

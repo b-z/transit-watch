@@ -1,6 +1,8 @@
 """Hourly cloud and rain forecast from Open-Meteo (https://open-meteo.com, CC BY 4.0)."""
 import datetime as dt
 import json
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from zoneinfo import ZoneInfo
@@ -16,11 +18,23 @@ def forecast(lat, lon, when, tz_name):
         "hourly": "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,precipitation_probability,weather_code",
         "start_date": local.date().isoformat(), "end_date": local.date().isoformat(),
     })
-    try:
-        req = urllib.request.Request("https://api.open-meteo.com/v1/forecast?" + q, headers={"User-Agent": USER_AGENT})
-        h = json.load(urllib.request.urlopen(req, timeout=30))["hourly"]
-    except Exception as e:
-        return {"error": str(e)[:80]}
+    req = urllib.request.Request("https://api.open-meteo.com/v1/forecast?" + q, headers={"User-Agent": USER_AGENT})
+    for wait in (0, 5, 20, 60):        # the free API answers 429 when called in bursts
+        time.sleep(wait)
+        try:
+            h = json.load(urllib.request.urlopen(req, timeout=30))["hourly"]
+            break
+        except urllib.error.HTTPError as e:
+            err = e
+            if e.code != 429:
+                break
+        except Exception as e:
+            err = e
+            break
+    else:
+        return {"error": str(err)[:80]}
+    if "h" not in locals():
+        return {"error": str(err)[:80]}
     key = (local + dt.timedelta(minutes=30)).strftime("%Y-%m-%dT%H:00")
     i = h["time"].index(key) if key in h["time"] else local.hour
     w = {k: h[k][i] for k in h if k != "time"}
