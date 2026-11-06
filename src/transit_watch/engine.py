@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from sgp4.api import WGS72, WGS84, Satrec
 from skyfield.api import EarthSatellite, Loader, wgs84
+from skyfield.data import iers
 from skyfield.framelib import itrs
 
 A_WGS = 6378.137
@@ -77,11 +78,15 @@ def _local_km(lat, lon, home):
 class Engine:
     gravity = "wgs72"           # TLEs are fitted with WGS72 constants
 
-    def __init__(self, tle_text, ephemeris="de421.bsp", data_dir=".", body_mode="apparent"):
+    def __init__(self, tle_text, ephemeris="de421.bsp", data_dir=".", body_mode="apparent", oem=None):
         self.body_mode = body_mode
         loader = Loader(data_dir, verbose=False)
         # UT1 from IERS finals: skyfield's built-in table goes stale (0.14 s ~ 50 m on the ground in 2026-10)
         self.ts = loader.timescale(builtin=False)
+        # Polar motion from the same file: the crust wobbles 0.1-0.4" around the rotation pole, which moves every
+        # Earth-fixed position (and so the whole centerline) by up to ~12 m. skyfield only applies it when installed.
+        with loader.open("finals2000A.all") as f:
+            iers.install_polar_motion_table(self.ts, iers.parse_x_y_dut1_from_finals_all(f))
         self.eph = loader(ephemeris)
         self.earth = self.eph["earth"]
         self.bodies = {"S": self.eph["sun"], "M": self.eph["moon"]}
@@ -92,6 +97,13 @@ class Engine:
             s = EarthSatellite.from_satrec(Satrec.twoline2rv(lines[i + 1], lines[i + 2], g), self.ts)
             s.name = lines[i].strip()
             self.sats.append(s)
+        # NASA's ISS ephemeris where it covers the time (much closer to truth than the TLE), TLE elsewhere
+        self.oem = None
+        if oem:
+            from .oem import OEMSatellite
+            for k, sat in enumerate(self.sats):
+                if sat.model.satnum == 25544:
+                    self.sats[k] = self.oem = OEMSatellite(oem, sat, self.ts)
 
     # -- positions --
     def _sat_itrs(self, sat, t):
@@ -218,7 +230,22 @@ class Engine:
         mx, my = float(np.dot(rel, right)), float(np.dot(rel, upv))
         omega = math.hypot(mx, my) / 0.1                                  # rad/s
         R = rng.km[1]
+        attitude = None
+        if sat.model.satnum == 25544:
+            # ISS flies "XVV": modules along the inertial velocity, truss along the orbit normal; the arrays turn
+            # about the truss to face the Sun. Axes projected on the sky (x right, y up), as [vel, truss, array].
+            P = sat.at(tt).frame_xyz(itrs).km
+            vel = (P[:, 2] - P[:, 0]) / 0.1 + np.cross([0, 0, 7.2921150e-5], P[:, 1])
+            z = -P[:, 1] / np.linalg.norm(P[:, 1])
+            y = np.cross(z, vel); y /= np.linalg.norm(y)
+            x = np.cross(y, z)
+            sun = self._body_itrs("S", tt[1]) - P[:, 1]
+            sun /= np.linalg.norm(sun)
+            sxz = sun - np.dot(sun, y) * y
+            arr = np.cross(y, sxz / np.linalg.norm(sxz)) if np.linalg.norm(sxz) > 1e-6 else z
+            attitude = [round(float(np.dot(a, w)), 5) for a in (x, y, arr) for w in (right, upv)]
         return {
+            "attitude": attitude,
             "range_km": R,
             "size_arcsec": math.degrees(span / R) * 3600,
             "alt": alt.degrees[1], "az": az.degrees[1],

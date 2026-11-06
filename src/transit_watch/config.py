@@ -35,6 +35,8 @@ DEFAULTS = {
         # strict: IERS UT1, nutation, aberration. transit-finder: reproduces transit-finder.com.
         "mode": "strict",
         "compare_transit_finder": True,
+        # ISS from NASA JSC's published ephemeris where it covers the time (TLE beyond it)
+        "iss_oem": True,
     },
     "spot": {
         # Pick the nearest point of the centerline that is on land. auto = GSI in Japan, Open-Meteo elsewhere.

@@ -11,7 +11,7 @@ import numpy as np
 from skyfield import almanac
 from skyfield.api import wgs84
 
-from . import data, geo, interactive, render, weather
+from . import data, geo, imagery, interactive, render, weather
 from .engine import Engine, TFCompatEngine
 from .i18n import strings
 
@@ -51,7 +51,7 @@ def describe(eng, tr, spot, elev, tz):
     return {
         "sat": NAMES.get(sat.model.satnum, tr.sat), "norad": sat.model.satnum, "target": tr.target, "t": t,
         "time": t.utc_datetime().astimezone(tz), "size": v["size_arcsec"], "alt": v["alt"], "az": v["az"],
-        "range": v["range_km"], "width": v["width_km"] or 0.0, "motion_dir": v["motion_dir"],
+        "range": v["range_km"], "width": v["width_km"] or 0.0, "motion_dir": v["motion_dir"], "attitude": v["attitude"],
         "ang_vel": v["omega_arcmin_s"], "target_size": v["body_arcmin"], "duration": v["duration_s"],
         "illum": float(almanac.fraction_illuminated(eng.eph, "moon", t)) if tr.target == "M" else None,
         "limb_dir": bright_limb_dir(eng, o, t, spot) if tr.target == "M" else None,
@@ -167,7 +167,10 @@ def run(cfg, render_images=None, log=print):
     provider = cfg["spot"]["land_provider"]
 
     tle = data.prepare(srch["satellites"])
-    eng = ENGINES[mode](tle, data_dir=str(data.DATA_DIR))
+    # NASA's ISS ephemeris is far closer to truth than the TLE (~40 m vs ~300 m on the ground); the
+    # transit-finder comparison keeps the TLE, since that is what transit-finder uses
+    oem = data.iss_oem() if cfg["model"].get("iss_oem", True) and 25544 in srch["satellites"] and mode == "strict" else None
+    eng = ENGINES[mode](tle, data_dir=str(data.DATA_DIR), **({"oem": oem} if oem else {}))
     other = ENGINES[cmp_mode](tle, data_dir=str(data.DATA_DIR)) if cfg["model"]["compare_transit_finder"] else None
     iss_id = srch["satellites"][0]
 
@@ -209,6 +212,7 @@ def run(cfg, render_images=None, log=print):
             # geoid along the line for the map; a coarser grid keeps the number of geoid requests down
             e["track"]["geoid"] = [round(geo.geoid_height(*p0[i], grid=0.25), 2) for i in e["track"]["sparse"]["i"]]
         e["sky_per_m"] = sky_per_metre(eng, sat, e)
+        e["img"] = imagery.for_event(eng, e, e["spot"], e["h_ell"])
         picks.append(e)
         log(f"  {e['time']:%m-%d %H:%M:%S} {e['sat']} {e['target']} {e['size']:.1f}″")
 
@@ -220,11 +224,16 @@ def run(cfg, render_images=None, log=print):
     if do_render and not chrome:
         print("[warning] Chrome/Chromium not found; skipping images (set render.chrome in the config).", file=sys.stderr)
 
+    if eng.oem is not None:
+        cover = eng.ts.tt_jd(eng.oem.stop).utc_datetime().astimezone(tz)
+        oem_note = S["oem"].format(created=eng.oem.created.astimezone(tz), until=cover)
+    else:
+        oem_note = ""
     epochs = ", ".join(f"{NAMES.get(s.model.satnum, s.name)} {s.epoch.utc_datetime().astimezone(tz):%m-%d %H:%M}"
                        for s in eng.sats)
     end = today + dt.timedelta(days=srch["days"])
     md = [f"# {S['title'].format(date=today, start=today, end=end, found=len(found), picked=len(picks))}",
-          S["tle"].format(epochs=epochs, mode=S["mode"][mode]), ""]
+          S["tle"].format(epochs=epochs, mode=S["mode"][mode]) + oem_note, ""]
     if not picks:
         md.append(S["none"])
     for e in picks:

@@ -31,6 +31,10 @@ def event_data(e, S, tz):
         "bodySize": round(e["target_size"], 3), "angVel": round(e["ang_vel"], 4), "sunAlt": round(e["sun_alt"], 1),
         "illum": e["illum"], "limb": e["limb_dir"], "skyPerM": [round(v, 5) for v in e["sky_per_m"]], "onLand": bool(e["on_land"]),
     }
+    if e.get("img"):
+        d["img"] = e["img"]
+    if e.get("attitude"):
+        d["att"] = e["attitude"]
     if tr:
         d.update({"t0": tr["t0"].timestamp() * 1000, "dt": tr["dt"], "p0": tr["p0"], "p1": tr["p1"],
                   "sp": tr["sparse"], "geoid": tr["geoid"]})
@@ -39,7 +43,16 @@ def event_data(e, S, tz):
 
 def write(picks, home, S, cfg, path, generated):
     events = [event_data(e, S, cfg["location"]["timezone"]) for e in picks]
-    data = {"events": events, "home": list(home), "tz": cfg["location"]["timezone"], "lang": cfg["output"]["language"],
+    # one copy of each picture (all future Sun events share the latest SDO image)
+    images = []
+    for ev in events:
+        if ev.get("img"):
+            img = dict(ev["img"])
+            geom = {k: img.pop(k) for k in ("src", "cx", "cy", "scale", "w")}
+            if geom not in images:
+                images.append(geom)
+            ev["img"] = {"i": images.index(geom), "rot": img["rot"]}
+    data = {"events": events, "images": images, "home": list(home), "tz": cfg["location"]["timezone"], "lang": cfg["output"]["language"],
             "S": S["imap"], "dirs": S["dirs"], "generated": generated, "fps": cfg["render"]["fps"]}
     page = TEMPLATE.replace("__TITLE__", html.escape(S["imap"]["title"])).replace("__LEAFLET__", LEAFLET) \
         .replace("__DATA__", json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/"))
@@ -188,23 +201,39 @@ function station(sat,px,rot){const s=px/2;let b;
     [-s,-s+s*.28,s-s*.22,s-s*.5].map(x=>`<rect x="${x}" y="${-s*.42}" width="${s*.22}" height="${s*.84}"/>`).join("");}
   else b=`<rect x="${-s}" y="${-s*.15}" width="${2*s}" height="${s*.3}"/><rect x="${-s*.12}" y="${-s*.35}" width="${s*.24}" height="${s*.7}"/>`;
   return `<g transform="rotate(${rot.toFixed(2)})">${b}</g>`;}
+// the ISS as it hangs in the sky: modules along the velocity, the 109 m truss along the orbit normal, eight 35 m
+// array wings turned about the truss to the Sun; a = projected axes [vx,vy, tx,ty, ax,ay], k = px per metre
+function issShape(a,k){const P=(x,y,w)=>[k*(x*a[0]+y*a[2]+w*a[4]),-k*(x*a[1]+y*a[3]+w*a[5])];
+  const q=c=>`<polygon points="${c.map(p=>P(...p).map(v=>v.toFixed(2)).join(",")).join(" ")}"/>`;
+  let g=q([[-36,-2.2,0],[37,-2.2,0],[37,2.2,0],[-36,2.2,0]])+q([[-2.5,-54.5,0],[2.5,-54.5,0],[2.5,54.5,0],[-2.5,54.5,0]]);
+  for(const yc of[-48,-34,34,48])for(const[w0,w1]of[[2,37],[-37,-2]])g+=q([[0,yc-6,w0],[0,yc+6,w0],[0,yc+6,w1],[0,yc-6,w1]]);
+  return g;}
 // o: station minus body centre at closest approach, arcsec (x right, y up); size: station size, arcsec; dir: motion, deg ccw from zenith
 function diskSVG(ev,o,size,dir){
   const R=150,W=360,C=W/2,sun=ev.target==="S",sc=R/(ev.bodySize*30),px=Math.max(size*sc,1.2),tr=scr(dir);
   const ux=Math.cos(tr*Math.PI/180),uy=Math.sin(tr*Math.PI/180),ox=o[0]*sc,oy=-o[1]*sc,v=ev.angVel*60*sc/D.fps;
   let disk,bg,sil;
-  if(sun){bg="#9fc4e8";sil="#111";disk=`<defs><radialGradient id="g"><stop offset="0" stop-color="#fffbe8"/><stop offset=".75" stop-color="#ffe9a8"/><stop offset="1" stop-color="#f2a640"/></radialGradient></defs><circle r="${R}" fill="url(#g)"/>`;}
+  if(sun){bg="#000";sil="#111";disk=`<defs><radialGradient id="g"><stop offset="0" stop-color="#fffbe8"/><stop offset=".75" stop-color="#ffe9a8"/><stop offset="1" stop-color="#f2a640"/></radialGradient></defs><circle r="${R}" fill="url(#g)"/>`;}
   else{bg=ev.sunAlt<-6?"#05070d":ev.sunAlt<0?"#2b3a5c":"#7fa6d6";sil="#000";const k=ev.illum,a=R*Math.abs(2*k-1);
     disk=`<circle r="${R}" fill="#2a2a2e" opacity=".9"/><path d="M0 ${-R} A${R} ${R} 0 0 1 0 ${R} A${a} ${R} 0 0 ${k>.5?1:0} 0 ${-R}Z" fill="#e9e6dc" transform="rotate(${scr(ev.limb).toFixed(2)})"/>`;}
+  // real picture (SDO Sun / SVS Moon), turned so the zenith is up, scaled to the disk and clipped to it
+  if(ev.img&&D.images&&D.images[ev.img.i]){const im=D.images[ev.img.i],k=sc/im.scale;
+    disk=`<defs><clipPath id="dc"><circle r="${R}"/></clipPath></defs>`+(sun?"":`<circle r="${R}" fill="#2a2a2e" opacity=".9"/>`)+
+      `<g clip-path="url(#dc)"><image href="${im.src}" width="${im.w}" height="${im.w}" preserveAspectRatio="none"
+       style="${sun?"":"mix-blend-mode:lighten"}" transform="rotate(${ev.img.rot}) scale(${k.toFixed(5)}) translate(${-im.cx},${-im.cy})"/></g>`;}
   // frames along the path through o; frame 0 is the closest approach
   const n=Math.ceil((R*1.15)/v);let g="",inside=0;
   for(let i=-n;i<=n;i++){const x=ox+ux*v*i,y=oy+uy*v*i,r=Math.hypot(x,y);if(r>R+px)continue;if(r<R)inside++;
-    g+=`<g transform="translate(${x.toFixed(2)},${y.toFixed(2)})" opacity="${i===0?1:.45}" fill="${sil}">${station(ev.sat,px,tr+90)}</g>`;}
+    const shape=ev.att&&px>=3?issShape(ev.att,px/134):station(ev.sat,px,tr+90);
+    g+=`<g transform="translate(${x.toFixed(2)},${y.toFixed(2)})" opacity="${i===0?1:.45}" fill="${sil}">${shape}</g>`;}
+  // magnified attitude in a corner (to scale the station is a few pixels)
+  const inset=ev.att?`<g transform="translate(${C-46},${C-46})"><rect x="-40" y="-40" width="80" height="80" rx="6" fill="#fff" opacity=".8"/>
+    <g fill="#111">${issShape(ev.att,56/109)}</g><text y="36" text-anchor="middle" font-size="9" fill="#555">${S.attitude||"attitude"}</text></g>`:"";
   const L=R*1.25,path=`<line x1="${ox-ux*L}" y1="${oy-uy*L}" x2="${ox+ux*L}" y2="${oy+uy*L}" stroke="#d0101f" stroke-width="1.2" stroke-dasharray="5 5" opacity=".8"/>`+
     `<polygon points="0,-7 14,0 0,7" fill="#d0101f" transform="translate(${(ox+ux*L).toFixed(1)},${(oy+uy*L).toFixed(1)}) rotate(${tr.toFixed(1)})"/>`;
-  const fg=sun||ev.sunAlt>=0?"#111":"#ddd";
+  const fg=!sun&&ev.sunAlt>=0?"#111":"#ddd";   // the Sun is seen through a filter: black sky
   return {inside,svg:`<svg viewBox="${-C} ${-C} ${W} ${W}" width="100%" style="max-width:360px;display:block;background:${bg};border-radius:8px">
-    ${disk}${path}${g}<g transform="translate(${-C+16},${-C+14})" fill="${fg}" stroke="${fg}"><line x1="0" y1="26" x2="0" y2="4" stroke-width="1.5"/><polygon points="0,-3 -5,7 5,7" stroke="none"/>
+    ${disk}${path}${g}${inset}<g transform="translate(${-C+16},${-C+14})" fill="${fg}" stroke="${fg}"><line x1="0" y1="26" x2="0" y2="4" stroke-width="1.5"/><polygon points="0,-3 -5,7 5,7" stroke="none"/>
     <text x="9" y="20" stroke="none" font-size="11">${S.zenith}</text></g></svg>`};}
 
 // ---- map ----

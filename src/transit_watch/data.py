@@ -28,6 +28,18 @@ def refresh(path, max_age_h, download):
     return path
 
 
+ISS_OEM = "https://nasa-public-data.s3.amazonaws.com/iss-coords/current/ISS_OEM/ISS.OEM_J2K_EPH.txt"
+
+
+def iss_oem(data_dir=DATA_DIR):
+    """NASA JSC's current ISS ephemeris (re-issued every few days, ~15 days ahead), or None if unavailable."""
+    try:
+        return refresh(Path(data_dir) / "iss-oem.txt", 12, lambda: fetch(ISS_OEM, 120)).read_text()
+    except Exception as e:
+        print(f"[warning] no NASA ISS ephemeris, using the TLE: {e}", file=sys.stderr)
+        return None
+
+
 def prepare(norad_ids, data_dir=DATA_DIR):
     """Make sure TLEs and IERS data are fresh. Returns the TLE text."""
     data_dir = Path(data_dir)
